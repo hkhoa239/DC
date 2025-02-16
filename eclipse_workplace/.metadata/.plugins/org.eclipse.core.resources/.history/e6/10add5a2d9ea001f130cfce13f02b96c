@@ -1,0 +1,22 @@
+package org.cloudbus.cloudsim.examples;
+
+import java.text.DecimalFormat;
+import org.apache.commons.logging.Log;
+import org.cloudbus.cloudsim.core.CloudSim;
+
+public class CloudSimExample {
+	
+	public static void main(String[] args) {
+		Log.println("Starting CloudSimExample....");
+		
+		try {
+			int num_user = 1;
+			Calendar calendar = Calendar.getInstance();
+			boolean trace_flag = false;
+			
+			CloudSim.init(num_user,  calendar, trace_flag);
+			
+			Datacenter datacenter0 = create
+		}
+	}
+}
