@@ -183,8 +183,9 @@ class Env():
         containerIDsAllocated = []
 
         for (cid, hid) in action:
+            # chua giai quyet truong hop currentHost = -1
             container = self.getContainerByID(cid)
-            currentHostID = self.getContainerByCID(cid).getHostID()
+            currentHostID = self.getContainerByID(cid).getHostID()
             currentHost = self.getHostByID(currentHostID)
             targetHost = self.getHostByID(hid)
             
@@ -208,6 +209,7 @@ class Env():
         self.workload.updateDeployedContainers(self.getCreationIDs(migrations, self.deployed))
 
 
+        # can chinh sua ham addContainers() -> nen co priority
         newinfoscontainer = self.workload.generateNewContainers()
 
         self.addContainers(newinfoscontainer)
