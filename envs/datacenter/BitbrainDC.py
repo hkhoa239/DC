@@ -17,8 +17,9 @@ class BitbrainDC():
 			'DiskWrite' : [2000, 2000, 3000],
 			'BwUp' : [1000, 2000, 5000],
 			'BwDown': [2000, 4000, 10000],
-			'Power' : [1]
+			'Power' : [1, 1, 1]
  		}
+		self.hosts = []
 
 	def generateHosts(self):
 		hosts = []

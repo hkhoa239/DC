@@ -1,4 +1,4 @@
-from PM import PM
+from .PM import PM
 
 class PMConstant(PM):
     def __init__(self, constant):

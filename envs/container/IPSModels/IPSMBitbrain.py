@@ -1,4 +1,5 @@
-from IPSM import IPSM
+
+from .IPSM import IPSM
 
 class IPSMBitbrain(IPSM):
     def __init__(self, ips_list, max_ips, duration, SLA):
@@ -10,5 +11,13 @@ class IPSMBitbrain(IPSM):
         self.completedInstructions = 0
         self.totalInstructions = 0
 
-    def getIPS(self):
-        pass
+    def getIPS(self): # get instruction remaining
+        if self.totalInstructions == 0:
+            for ips in self.ips_list[:self.duration]:
+                self.totalInstructions += ips * self.container.env.intervaltime
+        if self.completedInstructions < self.totalInstructions:
+            return self.ips_list[(self.container.env.interval - self.container.startAt) % len(self.ips_list)]
+        return 0
+
+    def getMaxIPS(self):
+        return self.max_ips
