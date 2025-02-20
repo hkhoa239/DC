@@ -1,4 +1,4 @@
-from dc.env.container.RAMModels.RM import RM
+from .RM import RM
 
 class RMBitbrain(RM):
     def __init__(self, size_list, read_list, write_list):

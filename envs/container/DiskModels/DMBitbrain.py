@@ -1,4 +1,4 @@
-from DM import DM
+from .DM import DM
 
 class DMBitbrain(DM):
     def __init__(self, constant_size, read_list, write_list):
