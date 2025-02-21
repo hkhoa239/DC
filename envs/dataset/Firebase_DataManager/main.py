@@ -82,31 +82,6 @@ def firebase_data_fetch():
 def cleaning_raw_data():
     raw_data_path = "firebase_data.csv"
 
-    # data = pd.read_csv(raw_data_path)
-    #
-    # outliner = []
-    # for head, value in data.items():
-    #
-    #     # Bỏ đi cột có số giá trị 0 chiếm nhiều hơn 95%
-    #     value = value.tolist()
-    #     if value.count(0) / float(len(value)) >= 0.95:
-    #         data.drop([str(head)], axis=1, inplace=True)
-    #         continue
-    #
-    #     # Bỏ các hàng chứa giá trị outliner
-    #     q3, q1 = np.percentile(value, [75, 25])
-    #     irq = q3 - q1
-    #     outliner_1 = np.where(value > q3 + 1.5*irq)[0].tolist()
-    #     outliner_2 = np.where(value < q1 - 1.5*irq)[0].tolist()
-    #     if len(outliner_1) > 0:
-    #         outliner = list(set(outliner + outliner_1))
-    #     if len(outliner_2) > 0:
-    #         outliner = list(set(outliner + outliner_2))
-    #
-    # print("Drop outliner values at row: " + str(outliner))
-    # if len(outliner) > 0:
-    #     data.drop(index=outliner, inplace=True)
-
     data = pd.read_csv(raw_data_path)
 
     outliner = set()
@@ -117,9 +92,9 @@ def cleaning_raw_data():
         if not np.issubdtype(value.dtype, np.number):
             continue
 
-        if (value == 0).sum() / len(value) >= 0.95:
-            data.drop(columns=[head], inplace=True)
-            continue
+        # if (value == 0).sum() / len(value) >= 0.95:
+        #     data.drop(columns=[head], inplace=True)
+        #     continue
 
         clean_value = value.dropna()
 
