@@ -4,7 +4,7 @@ from datacenter.BitbrainDC import BitbrainDC
 import gymnasium as gym
 from Monitor import Monitor
 from container.Container import Container
-
+from host.Host import Host
 class Env():
     def __init__(self, TotalPower=1000, RouterBw=5, ContainerLimit=10, IntervalTime=1, HostLimit=5, Monitor=Monitor()):
         self.totalpower = TotalPower
@@ -45,7 +45,18 @@ class Env():
 
             hostinfo = self.datacenter.generateHosts()
             # create host 
-
+            for i, (IPS, RAM, Disk, Bw, Latency, Powermodel) in enumerate(hostinfo):
+                host = Host(
+                    ID = i,
+                    IPS = IPS,
+                    RAM = RAM,
+                    Disk = Disk,
+                    Bw = Bw,
+                    Latency = Latency,
+                    Powermodel = Powermodel,
+                    Environment = self
+                )
+                self.hostlist.append(host)
 
             
 
@@ -130,7 +141,7 @@ class Env():
         )
         self.containerlist.append(container)
         return container
-
+    
     def addContainerList(self, containerInfoList):
         deployed = containerInfoList[:min(len(containerInfoList), self.containerlimit - self.getNumActiveContainers())]
         deployedContainers = []
@@ -146,13 +157,34 @@ class Env():
     #     migrations = []
     #     routerBwToEach = self.totalbw / len(action)
 
-    def addContainer(self, CreationID, CreationInterval, IPSModel, RAMModel, DiskModel):
-        for i,c in enumerate(self.containerlist):
-            if c == None or not c.active:
-                container = Container(i, CreationID, CreationInterval, IPSModel, RAMModel, DiskModel, self, hostID=-1)
-                self.containerlist[i] = container
-                return container
+    # def addContainer(self, CreationID, CreationInterval, IPSModel, RAMModel, DiskModel):
+    #     for i,c in enumerate(self.containerlist):
+    #         if c == None or not c.active:
+    #             container = Container(i, CreationID, CreationInterval, IPSModel, RAMModel, DiskModel, self, hostID=-1)
+    #             self.containerlist[i] = container
+    #             return container
 
+    #addContainer base on host that using less power
+    def addContainer(self, CreationID, CreationInterval, IPSModel, RAMModel, DiskModel):
+        best_host = None
+        best_score = -float('inf')
+        
+        container = Container(-1, CreationID, CreationInterval, IPSModel, RAMModel, DiskModel, self, hostID=-1)
+        for host in self.hostlist:
+            if host.canAllocateContainer(container):
+                score = host.getEfficiencyScore()
+                if score > best_score:
+                    best_score = score
+                    best_host = host
+        
+        if best_host:
+            for i,c in enumerate(self.containerlist):
+                if c == None or not c.active:
+                    container.creationID = i
+                    container.hostid = best_host.id
+                    self.containerlist[i] = container
+                    return container
+        return None
 
     def addContainers(self, newContainerList):
         self.interval += 1
@@ -215,8 +247,6 @@ class Env():
         self.addContainers(newinfoscontainer)
 
         return migrations                
-
-
 
     def get_obs(self):
         pass

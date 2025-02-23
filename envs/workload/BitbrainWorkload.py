@@ -23,7 +23,8 @@ class BWGD(Workload):
         
 
 
-        self.dataset_path = "/Users/huynhledangkhoa/Documents/NCKH/data/dc/envs/dataset/gwa-bitbrains/fastStorage"
+        # self.dataset_path = "/Users/huynhledangkhoa/Documents/NCKH/data/dc/envs/dataset/gwa-bitbrains/fastStorage"
+        self.dataset_path = "/Users/Asus/Downloads/DC/envs/dataset/gwa-bitbrains/fastStorage"
         # self.dataset_path = os.path.abspath(os.path.join(parent_dir, "../dataset/gwa-bitbrains/fastStorage"))
         # print("Parent dir: ", parent_dir)
         # ("dataset: ", self.dataset_path)
@@ -37,7 +38,7 @@ class BWGD(Workload):
             CreationID = self.creation_id
             index = randint(1,500)
             
-            df = pd.read_csv(self.dataset_path+"/"+str(index)+'.csv', sep=';\t')
+            df = pd.read_csv(self.dataset_path+"/"+str(index)+'.csv', sep=';\t', engine="python")
             
             sla = gauss(self.meanSLA, self.sigmaSLA)
 

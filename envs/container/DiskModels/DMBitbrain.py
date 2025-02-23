@@ -7,5 +7,7 @@ class DMBitbrain(DM):
         self.read_list = read_list
         self.write_list = write_list
 
-    def disk(self):
-        pass
+    def disk(self): # track disk info and read, write at current time
+        read_list_count = (self.container.env.interval - self.container.startAt) % len(self.read_list)
+        write_list_count = (self.container.env.interval - self.container.startAt) % len(self.write_list)
+        return self.constant_size, self.read_list[read_list_count], self.write_list[write_list_count]
