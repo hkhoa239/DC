@@ -184,7 +184,7 @@ class Env():
 
         for (cid, hid) in action:
             container = self.getContainerByID(cid)
-            currentHostID = self.getContainerByCID(cid).getHostID()
+            currentHostID = self.getContainerByID(cid).getHostID()
             currentHost = self.getHostByID(currentHostID)
             targetHost = self.getHostByID(hid)
             
