@@ -1,3 +1,4 @@
+from math import ceil
 import gymnasium as gym, torch, numpy as np, torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
@@ -171,3 +172,74 @@ class conv_mlp_net(nn.Module):
         
         return x
     
+
+class DuelingQNetwork(nn.Module):
+    def __init__(self, state_size, action_size, ch=256, num_of_blocks=3):
+        super(DuelingQNetwork, self).__init__()
+
+        self.same_layer = ceil(num_of_blocks / 2)
+        self.diff_layer = num_of_blocks - self.same_layer
+
+        self.before = nn.Sequential(*[
+            nn.Conv1d(state_size, ch), 
+            nn.LeakyReLU(0.1, inplace=True)])
+        
+        self.same_list = nn.Sequential()
+        self.same_list_relus = nn.Sequential()
+        for i in range(self.same_layer):
+            self.same_list.add_module(str(i), nn.Sequential(*[
+                nn.Conv1d(ch, ch, kernel_size=1, stride=1, padding=0),
+                nn.LeakyReLU(0.1, inplace=False),
+                nn.Conv1d(ch, ch, kernel_size=1, stride=1, padding=0)]))
+            self.same_list_relus.add_module(str(i), nn.Sequential(*[
+                nn.LeakyReLU(0.1, inplace=False)]))
+
+
+        self.val = nn.Sequential()
+        self.val_relus = nn.Sequential()
+        for i in range(self.diff_layer):
+            self.val.add_module(str(i), nn.Sequential(*[
+                nn.Conv1d(ch, ch, kernel_size=1, stride=1, padding=0),
+                nn.LeakyReLU(0.1, inplace=False),
+                nn.Conv1d(ch, ch, kernel_size=1, stride=1, padding=0)]))
+            self.val_relus.add_module(str(i), nn.Sequential(*[
+                nn.LeakyReLU(0.1, inplace=False)]))
+
+        self.adv = nn.Sequential()
+        self.adv_relus = nn.Sequential()
+        for i in range(self.diff_layer):
+            self.adv.add_module(str(i), nn.Sequential(*[
+                nn.Linear(ch, ch),
+                nn.LeakyReLU(0.05, inplace=True),
+                nn.Linear(ch, ch)]))
+            self.adv_relus.add_module(str(i), nn.Sequential(*[
+                nn.LeakyReLU(0.05, inplace=False)]))
+        
+#        self.value = nn.Conv1d(ch, 1, kernel_size=1, stride=1, padding=0)
+        self.advantage = nn.Linear(ch, action_size)
+
+    def forward(self, x):
+        x_val = self.before(x)
+        for i in range(self.same_layer):
+            x0 = x_val
+            x_val = self.same_list[i](x_val)
+            x_val += x0
+            x_val = self.same_list_relus[i](x_val)
+        
+        x_adv = x_val
+        for i in range(self.diff_layer):
+            x0 = x_val
+            x_val = self.val[i](x_val)
+            x_val += x0
+            x_val = self.val[i](x_val)
+
+            x1 = x_adv
+            x_adv = self.adv[i](x_adv)
+            x_adv += x1
+            x_adv = self.val[i](x_adv)
+
+        x_val = nn.LeakyReLU(0.05, inplace=True)(self.advantage(x_val))
+        x_adv = nn.LeakyReLU(0.05, inplace=True)(self.advantage(x_adv))
+
+        advAverage = torch.mean(x_adv, dim=1, keepdim=True)
+        return x_val + x_adv - advAverage
