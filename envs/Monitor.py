@@ -8,9 +8,11 @@ class Monitor():
     def getMigrationFromHost(self, HostId, action):
         containerIDs = []
         for cid, _ in action:
-            hid = self.env.getContainerByID(cid).getHostID()
-            if hid == HostId:
-                containerIDs.append(cid)
+            con = self.env.getContainerByID(cid)
+            if con:
+                hid = self.env.getContainerByID(cid).getHostID()
+                if hid == HostId:
+                    containerIDs.append(cid)
 
         return containerIDs
     
