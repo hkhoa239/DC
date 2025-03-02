@@ -8,7 +8,7 @@ class BitbrainDC():
 	def __init__(self, num_hosts):
 		self.num_hosts = num_hosts
 		self.types = {
-			'IPS' : [5000, 10000, 50000], # Some containers have IPS requirement as high as 40k
+			'IPS' : [10000, 20000, 50000], # Some containers have IPS requirement as high as 40k
 			'RAMSize' : [3000, 4000, 8000],
 			'RAMRead' : [3000, 2000, 3000],
 			'RAMWrite' : [3000, 2000, 3000],
@@ -17,7 +17,8 @@ class BitbrainDC():
 			'DiskWrite' : [2000, 2000, 3000],
 			'BwUp' : [1000, 2000, 5000],
 			'BwDown': [2000, 4000, 10000],
-			'Power' : [1, 1, 1]
+			'Power' : [1, 1, 1],
+			
  		}
 		self.hosts = []
 

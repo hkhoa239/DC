@@ -14,8 +14,9 @@ import time, datetime
 from network.network import conv_mlp_net
 import matplotlib.pyplot as plt
 import matplotlib
-from envs.Env import Env
 from buffer.per import PrioritizedReplayBuffer
+from envs.Env import Env
+
 
 is_ipython = 'inline' in matplotlib.get_backend()
 if is_ipython:
@@ -76,11 +77,6 @@ class MECAgent:
         self.action_dim = action_dim
         self.save_dir = save_dir
 
-        # device = torch.device(
-        #     "cuda" if torch.cuda.is_available() else
-        #     "mps" if torch.backends.mps.is_available else
-        #     "cpu"
-        # )
         self.device = "cpu"
         self.net = MECNet(self.state_dim, self.action_dim).to(dtype=torch.float32)
         self.net = self.net.to(device=self.device)
@@ -91,8 +87,18 @@ class MECAgent:
         self.curr_step = 0
         self.save_every = 1e3
 
+        self.memory = PrioritizedReplayBuffer(capacity=100000)  # Use PER buffer
+        self.batch_size = 32
+
+        self.burnin = 0  # min. experiences before training
+        self.learn_every = 10  # no. of experiences between updates to Q_online
+        self.sync_every = 10
+        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=0.00025)
+        self.loss_fn = torch.nn.SmoothL1Loss()
+        self.gamma = 0.9
+
         if checkpoint != "":
-            checkpoint_path = "train_dqn/mec_net_latest.chkpt"  # Update this path as needed
+            checkpoint_path = "train_dqn/mec_net_latest.chkpt"
             if Path(checkpoint_path).exists():
                 self.net, self.exploration_rate = self.load_model(self.net, checkpoint_path, self.device)
 
@@ -101,68 +107,30 @@ class MECAgent:
             raise FileNotFoundError(f"Checkpoint file not found: {checkpoint_path}")
 
         checkpoint = torch.load(checkpoint_path, map_location=device)
-
-        if not Path(checkpoint_path).exists():
-            raise FileNotFoundError(f"Checkpoint file not found: {checkpoint_path}")
-
-        checkpoint = torch.load(checkpoint_path, map_location=device)
-
-        # Load model weights
         model.load_state_dict(checkpoint["model"])
-        
-        # Load exploration rate
-        exploration_rate = checkpoint.get("exploration_rate", 1.0)  # Default to 1.0 if not found
-
+        exploration_rate = checkpoint.get("exploration_rate", 1.0)
         print(f"✅ Loaded model from {checkpoint_path}")
 
         return model, exploration_rate
 
     def act(self, state):
-        # EXPLORE
         if np.random.rand() < self.exploration_rate:
             action_idx = np.random.randint(self.action_dim)
-
-        # EXPLOITE
         else:
-            state = state.__array__()
             state = torch.tensor(state, device=self.device).unsqueeze(0)
             actions_values = self.net(state, model="online")
-            # print(actions_values)
             action_idx = torch.argmax(actions_values, axis=1).item()
         self.exploration_rate *= self.exploration_rate_decay
         self.exploration_rate = max(self.exploration_rate_min, self.exploration_rate)
         self.curr_step += 1
         return action_idx
-    
-    
-
-class MECAgent(MECAgent):
-    def __init__(self, state_dim, action_dim, save_dir, checkpoint=""):
-        super().__init__(state_dim, action_dim, save_dir, checkpoint)
-        self.memory = PrioritizedReplayBuffer(capacity=100000)
-        self.batch_size = 32
 
     def cache(self, state, next_state, action, reward, done):
-        def first_if_tuple(x):
-            return x[0] if isinstance(x, tuple) else x
-        state = first_if_tuple(state).__array__()
-        next_state = first_if_tuple(next_state).__array__()
-
-        state = torch.tensor(state)
-        next_state = torch.tensor(next_state)
-        action = torch.tensor([action])
-        reward = torch.tensor([reward])
-        done = torch.tensor([done])
-        # print({"state": state, "next_state": next_state, "action": action, "reward": reward, "done": done})
-        self.memory.store(TensorDict({"state": state, "next_state": next_state, "action": action, "reward": reward, "done": done}, batch_size=[]))
+        experience = (state, next_state, action, reward, done)
+        self.memory.store(experience)
 
     def recall(self):
-        # batch = self.memory.sample(self.batch_size).to(self.device)
-        # state, next_state, action, reward, done = (batch.get(key) for key in ("state", "next_state", "action", "reward", "done"))
-        # return state, next_state, action.squeeze(), reward.squeeze(), done.squeeze()
         batch, indices, IS_weights = self.memory.sample(self.batch_size)
-        print("BATCH", batch)
-        print("BATCH: ", zip(*batch))
         states, next_states, actions, rewards, dones = zip(*batch)
         states = torch.tensor(states).to(self.device)
         next_states = torch.tensor(next_states).to(self.device)
@@ -173,78 +141,57 @@ class MECAgent(MECAgent):
 
         return states, next_states, actions, rewards, dones, indices, IS_weights
 
-
-class MECAgent(MECAgent):
-    def __init__(self, state_dim, action_dim, save_dir, checkpoint=""):
-        super().__init__(state_dim, action_dim, save_dir, checkpoint)
-        self.burnin = 0  # min. experiences before training
-        self.learn_every = 2  # no. of experiences between updates to Q_online
-        self.sync_every = 10
-        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=0.00025)
-        self.loss_fn = torch.nn.SmoothL1Loss()
-        self.gamma = 0.9
-
-
-    def update_Q_online(self, td_estimate, td_target):
-        loss = self.loss_fn(td_estimate, td_target)
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
-        return loss.item()
-    
-    def sync_Q_target(self):
-        self.net.target.load_state_dict(self.net.online.state_dict())
-    
-    def save(self):
-        save_path = (
-            self.save_dir / f"mec_net_{int(self.curr_step // self.save_every)}.chkpt"
-        )
-        torch.save(
-            dict(model=self.net.state_dict(), exploration_rate=self.exploration_rate),
-            save_path,
-        )
-        print(f"MECNet saved to {save_path} at step {self.curr_step}")
-
     def td_estimate(self, state, action):
-        # print(state)
-        # print(action)
-        current_Q = self.net(state, model="online")[np.arange(0, self.batch_size, dtype=np.float32), action]
-    
+        current_Q = self.net(state, model="online")[np.arange(0, self.batch_size), action]
         return current_Q
-    
+
     @torch.no_grad()
     def td_target(self, reward, next_state, done):
         next_state_Q = self.net(next_state, model="online")
         best_action = torch.argmax(next_state_Q, axis=1)
         next_Q = self.net(next_state, model="target")[np.arange(0, self.batch_size), best_action]
-        # print(reward)
-        # print(next_Q)
         return (reward + (1 - done.float() * self.gamma * next_Q)).float()
+
+    def update_Q_online(self, td_estimate, td_target, IS_weights):
+        loss = (td_estimate - td_target).pow(2) * IS_weights
+        loss = loss.mean()
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        return loss.item()
 
     def learn(self):
         if self.curr_step % self.sync_every == 0:
             self.sync_Q_target()
-        
+
         if self.curr_step % self.save_every == 0:
             self.save()
 
         if self.curr_step < self.burnin:
             return None, None
-        
+
         if self.curr_step % self.learn_every != 0:
             return None, None
-        
-        
+
         states, next_states, actions, rewards, dones, indices, IS_weights = self.recall()
 
         td_est = self.td_estimate(states, actions)
         td_tgt = self.td_target(rewards, next_states, dones)
-        
-        loss = self.update_Q_online(td_est, td_tgt)
+
+        loss = self.update_Q_online(td_est, td_tgt, IS_weights)
+
         td_errors = td_est - td_tgt
         self.memory.update_priority(indices, td_errors.cpu().detach().numpy())
-        # print(td_est, " -------------------- ")
+
         return (td_est.mean().item(), loss)
+
+    def sync_Q_target(self):
+        self.net.target.load_state_dict(self.net.online.state_dict())
+
+    def save(self):
+        save_path = self.save_dir / f"mec_net_{int(self.curr_step // self.save_every)}.chkpt"
+        torch.save(dict(model=self.net.state_dict(), exploration_rate=self.exploration_rate), save_path)
+        print(f"MECNet saved to {save_path} at step {self.curr_step}")
 
 
 class MECLogger:
@@ -307,9 +254,6 @@ class MECLogger:
             self.curr_ep_q += q
             self.curr_ep_loss_length += 1
 
-
-
-
     def log_episode(self):
         "Mark end of episode"
         self.ep_rewards.append(self.curr_ep_reward)
@@ -323,7 +267,6 @@ class MECLogger:
         self.ep_avg_losses.append(ep_avg_loss)
         self.ep_avg_qs.append(ep_avg_q)
 
-       
         # self.plot_rewards()
 
         self.init_episode()
@@ -396,11 +339,12 @@ def simulate():
         step = 0
         state, info = env.reset()
         while True:
+            print(state)
             action = mec.act(state)
             decision = env.filter_action(action)
             next_state, reward, done, info = env.step(action=decision)
             print(info)
-            time.sleep(2)
+            
             # next_state, reward, done, info = env.step(action)
             mec.cache(state, next_state, action, reward, done)
 

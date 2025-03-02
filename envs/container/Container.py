@@ -26,11 +26,16 @@ class Container():
         self.diskmodel = DiskModel
         self.diskmodel.allocContainer(self)
 
+        self.waitingTime = 0
+
+    def getWaitingtime(self):
+        return self.waitingTime
 
     def getBaseIPS(self):
         return self.ipsmodel.getIPS()
 
     def getApparentIPS(self):
+        
         if self.hostid == -1: 
             return self.ipsmodel.getMaxIPS()
         hostBaseIPS = self.getHost().getBaseIPS()
@@ -38,7 +43,8 @@ class Container():
         canUseIPS = (hostIPSCap - hostBaseIPS) / len(self.env.getContainersOfHost(self.hostid))
         if canUseIPS < 0:
             return 0
-        return min(self.ipsmodel.getMaxIPS(), self.getBaseIPS() + canUseIPS)
+        r =  min(self.ipsmodel.getMaxIPS(), self.getBaseIPS() + canUseIPS)
+        return r
 
 
     def getRAM(self):
@@ -97,6 +103,7 @@ class Container():
             "ips": self.getBaseIPS(),
             "ram": self.getRAM(),
             "disk": self.getDisk(),
+            "waiting_time": self.getWaitingtime(),
             "total_exe_time": self.totalExecTime,
             "total_migration_time": self.totalMigrationTime,
             "total_instruction": self.ipsmodel.totalInstructions,

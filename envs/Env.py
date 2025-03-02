@@ -6,6 +6,7 @@ from Monitor import Monitor
 from container.Container import Container
 from .host.Host import Host
 import time
+import numpy as np
 
 class Env():
     def __init__(self, TotalPower=10000, RouterBw=10000, ContainerLimit=10, IntervalTime=1, HostLimit=2, Monitor=Monitor()):
@@ -14,7 +15,7 @@ class Env():
         self.hostlimit = HostLimit
         self.containerlimit = ContainerLimit
         self.intervaltime = IntervalTime
-
+        self.curr_step = 0
         self.workload = BWGD(
             meanNumContainers=1,
             sigmaNumContainers=0.2
@@ -28,11 +29,17 @@ class Env():
 
         self.monitor = Monitor
 
-        self.action_space = None
-        self.observation_spaces = None
+        self.action_space = gym.spaces.Discrete(HostLimit)
+        self.observation_space = gym.spaces.Box(
+            low=0,
+            high=1,
+            shape=(ContainerLimit*3+9,HostLimit)
+        )
 
         self.initialized_flag = False
         self.interval = 0
+        self.total_respone_time = 0
+        self.total_completed_task = 0
 
         self.deployed = None
         
@@ -60,8 +67,9 @@ class Env():
                 )
                 self.hostlist.append(host)
             
+            state = self.get_state()
             info = self.get_info()
-            return info
+            return state, info
 
             
 
@@ -185,6 +193,8 @@ class Env():
         destroyed = []
         for i,container in enumerate(self.containerlist):
             if container and container.getBaseIPS() == 0:
+                self.total_respone_time += container.waitingTime + container.totalMigrationTime + container.totalExecTime
+                self.total_completed_task += 1
                 container.destroy()
                 self.containerlist[i] = None
                 self.inactivecontainers.append(container)
@@ -198,7 +208,7 @@ class Env():
         routerBwToEach = self.totalbw / len(action) if len(action) > 0 else self.totalbw
         migrations = []
         containerIDsAllocated = []
-        print("EXECUTING step: ", self.interval)
+        print("EXECUTING step: ", self.curr_step)
         for (cid, hid) in action:
             print(f"{cid} ----------------- {hid}")
             time.sleep(1)
@@ -238,8 +248,13 @@ class Env():
                 print(f"Host {hid} is not enough resource.")
 
         for cid in range(self.containerlimit):
+            if self.containerlist[cid] and self.containerlist[cid].getHostID() != -1:
+                if not self.checkIfPossible(cid, self.containerlist[cid].getHostID()):
+                    self.containerlist[cid].hostid = -1
+
+        for cid in range(self.containerlimit):
             if self.containerlist[cid] and self.containerlist[cid].hostid == -1:
-                self.containerlist[cid] = None
+                self.containerlist[cid].waitingTime += self.intervaltime
 
         for i,c in enumerate(self.containerlist):
             if c and i not in containerIDsAllocated and c.hostid != -1:
@@ -251,14 +266,16 @@ class Env():
 
 
         # can chinh sua ham addContainers() -> nen co priority
-        self.interval += 1
+        self.interval += self.intervaltime
         newinfoscontainer = self.workload.generateNewContainers(self.interval)
 
         self.addContainers(newinfoscontainer)
 
+        self.curr_step += 1
         info = self.get_info()
-
-        return info              
+        state = self.get_state()
+        reward = self.calc_rew()
+        return state, reward, False, info              
 
 
     def get_info(self):
@@ -276,9 +293,44 @@ class Env():
             "hosts": hostl,
             "containers": containerl
         }
+    
+    def get_container_usage(self, host):
+        usage = []
+        for i,container in enumerate(self.containerlist):
+            if container:
+                IPSUse = container.getBaseIPS() / host.ipsCapacity
+                rs, _, _ = container.getRAM()
+                rsa, _, _ = host.getRAMAvailable()
+                RamSizeUse = rs / rsa
+                ds, _, _ = container.getDisk()
+                dsa, _, _ = host.getDiskAvailable()
+                DiskSizeUse = ds / dsa
+                usage.extend([IPSUse, RamSizeUse, DiskSizeUse])
+            else:
+                usage.extend([0,0,0])
+        return usage
 
-    def get_obs(self):
-        pass
+    def get_state(self):
+        state = []
+        for i in range(self.hostlimit):
+            host = self.getHostByID(i)
+            host_state = host.get_state()
+            container_usage = self.get_container_usage(host)
+            host_state = [1] + host_state + container_usage
+
+            # print(len(host_state))
+            state.append(host_state)
+        state = np.array(state).T
+        return state
+
+    def filter_action(self, action):
+        decision = []
+        for i, c in enumerate(self.containerlist):
+            if c and c.getHostID() != action and c.getHostID() == -1:
+                decision.append((c.id, action))
+
+        return decision
+
 
     def calc_rew(self):
-        pass
+        return 1
