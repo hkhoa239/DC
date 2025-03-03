@@ -16,8 +16,17 @@ class PM():
             float: power consumption  
         """
         index = math.floor(cpu/10)
-        left = self.powerlist[index] # where powerlist?
-        right = self.powerlist[index+1 if cpu % 10 != 0 else index]
         alpha = (cpu/10) - index
-        return alpha * right + (1-alpha) * left
+        if cpu > 0:
+            static_power = cpu
+        else:
+            static_power = 0
+        if cpu < 70:
+            dynamic_power = cpu * alpha
+        else:
+            dynamic_power = 70 * alpha + ((cpu - 70) ** 2) * (1 - alpha)
+        # print("alpha", alpha)
+        # print("static", static_power)
+        # print("dynamic", dynamic_power)
+        return static_power + dynamic_power
     

@@ -34,6 +34,13 @@ class Container():
         if self.hostid == -1:
             return self.ipsmodel.getMaxIPS()
 
+    def getCPU(self):
+        if self.hostid == -1:
+            return 0
+        ips = self.getApparentIPS()
+        hostIpsCaps = self.getHost().ipsCapacity
+        return min(100, 100 * (ips / hostIpsCaps))
+    
     def getRAM(self):
         rsize, rread, rwrirte = self.rammodel.ram()
         self.lastContainerSize = rsize

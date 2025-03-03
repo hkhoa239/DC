@@ -253,3 +253,19 @@ class Env():
 
     def calc_rew(self):
         pass
+
+    def getPowerConsumption(self):
+        totalPower = 0
+        hosts = set(container.getHost() for container in self.containerlist if container is not None)  # Lọc host hợp lệ
+        
+        for host in hosts:
+            containers = [c for c in self.containerlist if c is not None and c.getHost() == host]
+            if not containers:
+                continue  # Nếu host không có container thì bỏ qua
+
+            # Tính CPU utilization cho từng host
+            CPU_utilization = sum(c.getCPU() for c in containers) / host.getCPUAvailable()
+            print("CPU_util", CPU_utilization)
+            totalPower += host.getPowerCPU(CPU_utilization)  # Tính power dựa trên CPU utilization của từng host
+        
+        return totalPower
