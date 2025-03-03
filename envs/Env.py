@@ -4,15 +4,18 @@ from datacenter.BitbrainDC import BitbrainDC
 import gymnasium as gym
 from Monitor import Monitor
 from container.Container import Container
-from host.Host import Host
+from .host.Host import Host
+import time
+import numpy as np
+
 class Env():
-    def __init__(self, TotalPower=1000, RouterBw=5, ContainerLimit=10, IntervalTime=1, HostLimit=5, Monitor=Monitor()):
+    def __init__(self, TotalPower=10000, RouterBw=10000, ContainerLimit=10, IntervalTime=1, HostLimit=2, Monitor=Monitor()):
         self.totalpower = TotalPower
         self.totalbw = RouterBw
         self.hostlimit = HostLimit
         self.containerlimit = ContainerLimit
         self.intervaltime = IntervalTime
-
+        self.curr_step = 0
         self.workload = BWGD(
             meanNumContainers=1,
             sigmaNumContainers=0.2
@@ -26,11 +29,17 @@ class Env():
 
         self.monitor = Monitor
 
-        self.action_space = None
-        self.observation_spaces = None
+        self.action_space = gym.spaces.Discrete(HostLimit)
+        self.observation_space = gym.spaces.Box(
+            low=0,
+            high=1,
+            shape=(ContainerLimit*3+9,HostLimit)
+        )
 
         self.initialized_flag = False
         self.interval = 0
+        self.total_respone_time = 0
+        self.total_completed_task = 0
 
         self.deployed = None
         
@@ -57,6 +66,10 @@ class Env():
                     Environment = self
                 )
                 self.hostlist.append(host)
+            
+            state = self.get_state()
+            info = self.get_info()
+            return state, info
 
             
 
@@ -111,7 +124,7 @@ class Env():
         return ipsreq <= ipsav and ramsizereq <= ramsizeav and ramreadreq <= ramreadav and ramwritereq <= ramwriteav and disksizereq <= disksizeav and diskreadreq <= diskreadav and diskwritereq <= diskwriteav 
 
     def addContainersInit(self, containerInfoListInit):
-        self.interval += 1
+        # self.interval += 1
         deployed = self.addContainerListInit(containerInfoListInit)
         return deployed
 
@@ -166,29 +179,17 @@ class Env():
 
     #addContainer base on host that using less power
     def addContainer(self, CreationID, CreationInterval, IPSModel, RAMModel, DiskModel):
-        best_host = None
-        best_score = -float('inf')
-        
-        container = Container(-1, CreationID, CreationInterval, IPSModel, RAMModel, DiskModel, self, hostID=-1)
-        for host in self.hostlist:
-            if host.canAllocateContainer(container):
-                score = host.getEfficiencyScore()
-                if score > best_score:
-                    best_score = score
-                    best_host = host
-        
-        if best_host:
-            for i,c in enumerate(self.containerlist):
-                if c == None or not c.active:
-                    container.creationID = i
-                    container.hostid = best_host.id
-                    self.containerlist[i] = container
-                    return container
-        return None
+        for i,c in enumerate(self.containerlist):
+            if c == None or not c.active:
+                container = Container(i, CreationID, CreationInterval, IPSModel, RAMModel, DiskModel, self, HostID=-1)
+                self.containerlist[i] = container
+                return container
+            
+
 
     def addContainers(self, newContainerList):
-        self.interval += 1
         destroyed = self.destroyCompletedContainers()
+        print("COMPLETED: ", [c.get_info() for c in destroyed])
         self.deployed = self.addContainerList(newContainerList)
         return self.deployed, destroyed
     
@@ -200,6 +201,8 @@ class Env():
         destroyed = []
         for i,container in enumerate(self.containerlist):
             if container and container.getBaseIPS() == 0:
+                self.total_respone_time += container.waitingTime + container.totalMigrationTime + container.totalExecTime
+                self.total_completed_task += 1
                 container.destroy()
                 self.containerlist[i] = None
                 self.inactivecontainers.append(container)
@@ -213,46 +216,132 @@ class Env():
         routerBwToEach = self.totalbw / len(action) if len(action) > 0 else self.totalbw
         migrations = []
         containerIDsAllocated = []
-
+        print("EXECUTING step: ", self.curr_step)
         for (cid, hid) in action:
+            print(f"{cid} ----------------- {hid}")
+            time.sleep(1)
+            if (self.containerlist[cid] == None):
+                print("No Container: ", cid)
+                break
             # chua giai quyet truong hop currentHost = -1
             container = self.getContainerByID(cid)
             currentHostID = self.getContainerByID(cid).getHostID()
-            currentHost = self.getHostByID(currentHostID)
             targetHost = self.getHostByID(hid)
-            
-            migrateFromNum = len(self.monitor.getMigrationFromHost(currentHostID, action))
-            migrationToNum = len(self.monitor.getMigrationFromHost(hid, action=action))
+            if (currentHostID == -1):
+                
+                migrationToNum = len(self.monitor.getMigrationToHost(hid, action=action))
 
-            allocbw = min(targetHost.bwCap.downlink / migrationToNum, currentHost.bwCap.downlink / migrateFromNum, routerBwToEach)
+                allocbw = min(targetHost.bwCapacity.downlink / migrationToNum, routerBwToEach)
+
+                if hid != self.containerlist[cid].hostid and self.checkIfPossible(cid, hid):
+                    migrations.append((cid, hid))
+                    container.allocateAndExecute(hid, allocbw)
+                    containerIDsAllocated.append(cid)
+                elif not self.checkIfPossible(cid, hid):
+                    print(f"Host {hid} is not enough resource.")
+            
+            else:
+                currentHost = self.getHostByID(currentHostID)
+            
+                migrateFromNum = len(self.monitor.getMigrationFromHost(currentHostID, action))
+                migrationToNum = len(self.monitor.getMigrationToHost(hid, action=action))
+
+                allocbw = min(targetHost.bwCapacity.downlink / migrationToNum, currentHost.bwCapacity.uplink / migrateFromNum, routerBwToEach)
 
             if hid != self.containerlist[cid].hostid and self.checkIfPossible(cid, hid):
                 migrations.append((cid, hid))
-                container.allocateEndExecute(hid, allocbw)
+                container.allocateAndExecute(hid, allocbw)
                 containerIDsAllocated.append(cid)
+            elif not self.checkIfPossible(cid, hid):
+                print(f"Host {hid} is not enough resource.")
 
-        for (cid, hid) in action:
-            if self.containerlist[cid].hostid == -1:
-                self.containerlist[cid] = None
+        for cid in range(self.containerlimit):
+            if self.containerlist[cid] and self.containerlist[cid].getHostID() != -1:
+                if not self.checkIfPossible(cid, self.containerlist[cid].getHostID()):
+                    self.containerlist[cid].hostid = -1
+
+        for cid in range(self.containerlimit):
+            if self.containerlist[cid] and self.containerlist[cid].hostid == -1:
+                self.containerlist[cid].waitingTime += self.intervaltime
+
         for i,c in enumerate(self.containerlist):
-            if c and i not in containerIDsAllocated:
-                container.execute(0)
+            if c and i not in containerIDsAllocated and c.hostid != -1:
+                migrations.append((c.id, c.hostid))
+                c.execute(0)
+
 
         self.workload.updateDeployedContainers(self.getCreationIDs(migrations, self.deployed))
 
 
         # can chinh sua ham addContainers() -> nen co priority
-        newinfoscontainer = self.workload.generateNewContainers()
+        self.interval += self.intervaltime
+        newinfoscontainer = self.workload.generateNewContainers(self.interval)
 
         self.addContainers(newinfoscontainer)
 
-        return migrations                
+        self.curr_step += 1
+        info = self.get_info()
+        state = self.get_state()
+        reward = self.calc_rew()
+        return state, reward, False, info              
 
-    def get_obs(self):
-        pass
+
+    def get_info(self):
+        hostl = []
+        containerl = []
+
+        for host in self.hostlist:
+            hostl.append(host.get_info())
+
+        for container in self.containerlist:
+            if container:
+                containerl.append(container.get_info())
+
+        return {
+            "hosts": hostl,
+            "containers": containerl
+        }
+    
+    def get_container_usage(self, host):
+        usage = []
+        for i,container in enumerate(self.containerlist):
+            if container:
+                IPSUse = container.getBaseIPS() / host.ipsCapacity
+                rs, _, _ = container.getRAM()
+                rsa, _, _ = host.getRAMAvailable()
+                RamSizeUse = rs / rsa
+                ds, _, _ = container.getDisk()
+                dsa, _, _ = host.getDiskAvailable()
+                DiskSizeUse = ds / dsa
+                usage.extend([IPSUse, RamSizeUse, DiskSizeUse])
+            else:
+                usage.extend([0,0,0])
+        return usage
+
+    def get_state(self):
+        state = []
+        for i in range(self.hostlimit):
+            host = self.getHostByID(i)
+            host_state = host.get_state()
+            container_usage = self.get_container_usage(host)
+            host_state = [1] + host_state + container_usage
+
+            # print(len(host_state))
+            state.append(host_state)
+        state = np.array(state).T
+        return state
+
+    def filter_action(self, action):
+        decision = []
+        for i, c in enumerate(self.containerlist):
+            if c and c.getHostID() != action and c.getHostID() == -1:
+                decision.append((c.id, action))
+
+        return decision
+
 
     def calc_rew(self):
-        pass
+        return 1
 
     def getPowerConsumption(self):
         totalPower = 0

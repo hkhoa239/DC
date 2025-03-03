@@ -22,6 +22,9 @@ class Host():
     def getPower(self):
         return self.powermodel.power()
     
+    def getPowerCPU(self, cpu):
+        return self.powermodel.powerFormCPU(cpu)
+    
     def getPowerFromIPS(self, ips):
         # Ensure CPU utilization is limited at 100%
         return self.powermodel.powerFromCPU(min(100, 100*(ips/self.ipsCapacity)))
@@ -29,11 +32,11 @@ class Host():
     def getCPU(self):
         ips = self.getApparentIPS()
         return 100 * (ips / self.ipsCapacity)
-
+    
     def getCPUAvailable(self):
         ips = self.getIPSAvailable()
         return 100 * (ips / self.ipsCapacity)
-        
+    
     def getBaseIPS(self):
         #Cal sum base IPS from all containers assigned to the host
         ips = sum([self.env.getContainerByID(containerID).getBaseIPS() for containerID in self.env.getContainersOfHost(self.id)])
@@ -88,9 +91,59 @@ class Host():
             return True
         return False
         
+    def getEfficiencyScore(self):
+        #Cal efficiency of power: for cal the host that using less power will be choosing
+        power = self.getPower()
+        ips = self.getApparentIPS()
+        return ips / power if power > 0 else 0    
+    
+    def get_info(self):
+        info = {
+            "id": self.id,
+            "container_ids": self.env.getContainersOfHost(self.id),
+            "power": self.getPower(),
+            "ram": self.getCurrentRAM(),
+            "disk": self.getCurrentDisk(),
+            "ips": self.getApparentIPS(),
+        }
+        return info
+    
+    def getIPSUsed(self):
+        return self.getBaseIPS() / self.ipsCapacity
+    
+    def getRAMUsed(self):
+        s, r, w = self.getCurrentRAM()
+        ramSizeUsed = s / self.ramCapacity.size
+        ramReadUsed = r / self.ramCapacity.read
+        ramWriteUsed = w / self.ramCapacity.write
+        return ramSizeUsed, ramReadUsed, ramWriteUsed
+
+    def getDiskUsed(self):
+        s, r, w = self.getCurrentDisk()
+        diskSizeUsed = s / self.diskCapacity.size
+        diskReadUsed = r / self.diskCapacity.read
+        diskWriteUsed = w / self.diskCapacity.write
+        return diskReadUsed, diskReadUsed, diskWriteUsed
+
+    def get_state(self):
+        # ipsCap = self.ipsCapacity / 1000
+        # ramsCap = self.ramCapacity / 1000
+        # diskCap = self.diskCapacity / 1000
+        # latency = self.latency / 1000
+        # power = self.getPower()
+        # ram = self.getCurrentRAM() / ramCap
+        # disk = self.getCurrentDisk() / diskCap
+        # ips = self.getApparentIPS() / ipsCap
+        ipsUsed = self.getIPSUsed()
+        ramSizeUsed, ramReadUsed, ramWriteUsed = self.getRAMUsed()
+        diskSizeUsed, diskReadUsed, diskWriteUsed = self.getDiskUsed()
+        power = self.getPower()
+        return [ipsUsed, ramSizeUsed, ramReadUsed, ramWriteUsed, diskSizeUsed, diskReadUsed, diskWriteUsed, power]
+
     def calculateHostPowerConsumption(self):
         containers = self.env.getContainersOfHost(self.id)
         CPU_utilization = sum(c.getCPU() for c in containers) / self.getCPUAvailable()
-        print("CPU_util", CPU_utilization)
         totalPower = self.getPowerCPU(CPU_utilization)
         return totalPower
+        
+        

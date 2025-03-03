@@ -29,4 +29,3 @@ class PM():
         # print("static", static_power)
         # print("dynamic", dynamic_power)
         return static_power + dynamic_power
-    

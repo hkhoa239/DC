@@ -14,6 +14,8 @@ import time, datetime
 from network.network import conv_mlp_net
 import matplotlib.pyplot as plt
 import matplotlib
+from envs.Env import Env
+from buffer.per import PrioritizedReplayBuffer
 
 is_ipython = 'inline' in matplotlib.get_backend()
 if is_ipython:
@@ -83,7 +85,7 @@ class MECAgent:
         self.net = MECNet(self.state_dim, self.action_dim).to(dtype=torch.float32)
         self.net = self.net.to(device=self.device)
 
-        self.exploration_rate = 1
+        self.exploration_rate = 0
         self.exploration_rate_decay = 0.99975
         self.exploration_rate_min = 0.1
         self.curr_step = 0
@@ -137,7 +139,7 @@ class MECAgent:
 class MECAgent(MECAgent):
     def __init__(self, state_dim, action_dim, save_dir, checkpoint=""):
         super().__init__(state_dim, action_dim, save_dir, checkpoint)
-        self.memory = TensorDictReplayBuffer(storage=LazyMemmapStorage(100000,device=torch.device("cpu")))
+        self.memory = PrioritizedReplayBuffer(capacity=100000)
         self.batch_size = 32
 
     def cache(self, state, next_state, action, reward, done):
@@ -152,18 +154,30 @@ class MECAgent(MECAgent):
         reward = torch.tensor([reward])
         done = torch.tensor([done])
         # print({"state": state, "next_state": next_state, "action": action, "reward": reward, "done": done})
-        self.memory.add(TensorDict({"state": state, "next_state": next_state, "action": action, "reward": reward, "done": done}, batch_size=[]))
+        self.memory.store(TensorDict({"state": state, "next_state": next_state, "action": action, "reward": reward, "done": done}, batch_size=[]))
 
     def recall(self):
-        batch = self.memory.sample(self.batch_size).to(self.device)
-        state, next_state, action, reward, done = (batch.get(key) for key in ("state", "next_state", "action", "reward", "done"))
-        return state, next_state, action.squeeze(), reward.squeeze(), done.squeeze()
+        # batch = self.memory.sample(self.batch_size).to(self.device)
+        # state, next_state, action, reward, done = (batch.get(key) for key in ("state", "next_state", "action", "reward", "done"))
+        # return state, next_state, action.squeeze(), reward.squeeze(), done.squeeze()
+        batch, indices, IS_weights = self.memory.sample(self.batch_size)
+        print("BATCH", batch)
+        print("BATCH: ", zip(*batch))
+        states, next_states, actions, rewards, dones = zip(*batch)
+        states = torch.tensor(states).to(self.device)
+        next_states = torch.tensor(next_states).to(self.device)
+        actions = torch.tensor(actions).to(self.device)
+        rewards = torch.tensor(rewards).to(self.device)
+        dones = torch.tensor(dones).to(self.device)
+        IS_weights = torch.tensor(IS_weights).to(self.device)
+
+        return states, next_states, actions, rewards, dones, indices, IS_weights
 
 
 class MECAgent(MECAgent):
     def __init__(self, state_dim, action_dim, save_dir, checkpoint=""):
         super().__init__(state_dim, action_dim, save_dir, checkpoint)
-        self.burnin = 50  # min. experiences before training
+        self.burnin = 0  # min. experiences before training
         self.learn_every = 2  # no. of experiences between updates to Q_online
         self.sync_every = 10
         self.optimizer = torch.optim.Adam(self.net.parameters(), lr=0.00025)
@@ -221,12 +235,14 @@ class MECAgent(MECAgent):
             return None, None
         
         
-        state, next_state, action, reward, done = self.recall()
+        states, next_states, actions, rewards, dones, indices, IS_weights = self.recall()
 
-        td_est = self.td_estimate(state, action)
-        td_tgt = self.td_target(reward, next_state, done)
-
+        td_est = self.td_estimate(states, actions)
+        td_tgt = self.td_target(rewards, next_states, dones)
+        
         loss = self.update_Q_online(td_est, td_tgt)
+        td_errors = td_est - td_tgt
+        self.memory.update_priority(indices, td_errors.cpu().detach().numpy())
         # print(td_est, " -------------------- ")
         return (td_est.mean().item(), loss)
 
@@ -359,5 +375,47 @@ class MECLogger:
             plt.legend()
             plt.savefig(getattr(self, f"{metric}_plot"))
 
+def simulate():
+    use_cuda = torch.cuda.is_available()
 
+    save_dir = Path("train_dqn") / datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
 
+    save_dir.mkdir(parents=True)
+    
+    env = Env()
+    
+    checkpoint_path = ""
+
+    mec = MECAgent(state_dim=env.observation_space.shape, action_dim=env.action_space.n, save_dir=save_dir, checkpoint=checkpoint_path)
+    logger = MECLogger(save_dir)
+    
+
+    episodes = 40
+
+    for e in range(episodes):
+        step = 0
+        state, info = env.reset()
+        while True:
+            action = mec.act(state)
+            decision = env.filter_action(action)
+            next_state, reward, done, info = env.step(action=decision)
+            print(info)
+            time.sleep(2)
+            # next_state, reward, done, info = env.step(action)
+            mec.cache(state, next_state, action, reward, done)
+
+            q, loss = mec.learn()
+
+            # logger.log_step(reward, loss, q, step)
+            
+            # # print(step, "------------------", reward)
+
+            # step += 1
+
+            # if done or step > 1e3:
+            #     break
+        logger.log_episode()
+        
+        logger.record(episode=e, epsilon=mec.exploration_rate, step=mec.curr_step)
+
+simulate()

@@ -1,4 +1,4 @@
-
+import time
 class Container():
     # IPS = ips requirement
 	# RAM = ram requirement in MB
@@ -26,13 +26,25 @@ class Container():
         self.diskmodel = DiskModel
         self.diskmodel.allocContainer(self)
 
+        self.waitingTime = 0
+
+    def getWaitingtime(self):
+        return self.waitingTime
 
     def getBaseIPS(self):
         return self.ipsmodel.getIPS()
 
     def getApparentIPS(self):
-        if self.hostid == -1:
+        
+        if self.hostid == -1: 
             return self.ipsmodel.getMaxIPS()
+        hostBaseIPS = self.getHost().getBaseIPS()
+        hostIPSCap = self.getHost().ipsCapacity
+        canUseIPS = (hostIPSCap - hostBaseIPS) / len(self.env.getContainersOfHost(self.hostid))
+        if canUseIPS < 0:
+            return 0
+        r =  min(self.ipsmodel.getMaxIPS(), self.getBaseIPS() + canUseIPS)
+        return r
 
     def getCPU(self):
         if self.hostid == -1:
@@ -51,7 +63,7 @@ class Container():
     
     def getContainerSize(self):
         if self.lastContainerSize == 0: 
-            self.getRam()
+            self.getRAM()
         return self.lastContainerSize
     
     def getHostID(self):
@@ -62,7 +74,9 @@ class Container():
 
     def allocate(self, hostId, allocBw):
         lastMigrationTime = 0
-        if self.hostid != hostId:
+        if self.hostid == -1:
+            lastMigrationTime += self.getContainerSize() / allocBw
+        elif self.hostid != hostId:
             lastMigrationTime += self.getContainerSize() / allocBw
             lastMigrationTime += abs(self.env.hostlist[self.hostid].latency - self.env.hostlist[hostId].latency)
         self.hostid = hostId
@@ -73,8 +87,11 @@ class Container():
         self.totalMigrationTime += lastMigrationTime
         execTime = self.env.intervaltime - lastMigrationTime
         apparentIPS = self.getApparentIPS()
-        requiredExecTime = (self.ipsmodel.totalInstructions - self.ipsmodel.completedInstruction) / apparentIPS if apparentIPS else 0
-        self.ipsmodel.completedInstructions += apparentIPS * min (execTime, requiredExecTime)
+        requiredExecTime = (self.ipsmodel.totalInstructions - self.ipsmodel.completedInstructions) / apparentIPS if apparentIPS else 0
+        totalExeT = min(max(execTime, 0), requiredExecTime)
+        self.totalExecTime += totalExeT
+        self.ipsmodel.completedInstructions += apparentIPS * totalExeT
+        
 
     def allocateAndExecute(self, hostId, allocBw):
         self.execute(lastMigrationTime=self.allocate(hostId, allocBw))
@@ -83,3 +100,20 @@ class Container():
         self.destroyAt = self.env.interval
         self.hostid = -1
         self.active = False
+
+    def get_info(self):
+        info = {
+            "id": self.id,
+            "created_at": self.createAt,
+            "host_id": self.hostid,
+            "ips": self.getBaseIPS(),
+            "ram": self.getRAM(),
+            "disk": self.getDisk(),
+            "waiting_time": self.getWaitingtime(),
+            "total_exe_time": self.totalExecTime,
+            "total_migration_time": self.totalMigrationTime,
+            "total_instruction": self.ipsmodel.totalInstructions,
+            "completed_instruction": self.ipsmodel.completedInstructions,
+        }
+
+        return info

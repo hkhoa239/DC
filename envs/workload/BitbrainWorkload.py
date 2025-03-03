@@ -38,7 +38,7 @@ class BWGD(Workload):
             CreationID = self.creation_id
             index = randint(1,500)
             
-            df = pd.read_csv(self.dataset_path+"/"+str(index)+'.csv', sep=';\t', engine="python")
+            df = pd.read_csv(self.dataset_path+"/"+str(index)+'.csv', sep=';\t', engine='python')
             
             sla = gauss(self.meanSLA, self.sigmaSLA)
 

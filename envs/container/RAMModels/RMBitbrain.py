@@ -8,7 +8,7 @@ class RMBitbrain(RM):
         self.read_list = read_list
         self.write_list = write_list
 
-    def ram(self): # track ram size, read, write at current time
+    def ram(self):
         size_list_count = (self.container.env.interval - self.container.startAt) % len(self.size_list)
         read_list_count = (self.container.env.interval - self.container.startAt) % len(self.read_list)
         write_list_count = (self.container.env.interval - self.container.startAt) % len(self.write_list)
