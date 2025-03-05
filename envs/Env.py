@@ -42,7 +42,11 @@ class Env():
         self.total_completed_task = 0
 
         self.deployed = None
-        
+
+        self.resWeighted = 0.5  
+        self.powWeighted = 0.5   
+        self.historical_response_time = [1]
+        self.historical_power_consumption = [1]    
 
     def reset(self, seed=42):
         if not self.initialized_flag:
@@ -283,6 +287,7 @@ class Env():
         info = self.get_info()
         state = self.get_state()
         reward = self.calc_rew()
+        self.update_weights()
         return state, reward, False, info              
 
 
@@ -338,23 +343,44 @@ class Env():
                 decision.append((c.id, action))
 
         return decision
-
-
+    
     def calc_rew(self):
-        return 1
+        totalPowerConsumption = sum(host.calculateHostPowerConsumption() for host in self.hostlist)
+        self.historical_response_time.append(self.total_respone_time)
+        self.historical_power_consumption.append(totalPowerConsumption)
+        
+        max_response_time = max(self.historical_response_time)
+        max_power_consumption = max(self.historical_power_consumption)
 
+
+        norm_response_time  = self.total_respone_time / max_response_time
+        norm_power_consumption  = totalPowerConsumption / max_power_consumption
+
+        r_T = 1 / (1 + norm_response_time)  
+        r_E = 1 / (1 + norm_power_consumption)  
+        
+        # Reward tổng hợp dựa trên trọng số
+        reward = self.resWeighted * r_T + self.powWeighted * r_E
+        return reward        
+        
+    def update_weights(self):
+        if self.total_respone_time > 1.5:  # Nếu trễ cao, tăng trọng số độ trễ
+            self.resWeighted = min(1.0, self.resWeighted + 0.1)
+            self.powWeighted = max(0.0, self.powWeighted - 0.1)
+        elif sum(host.calculateHostPowerConsumption() for host in self.hostlist) > 5000:  # Nếu năng lượng cao, tăng trọng số năng lượng
+            self.resWeighted = max(0.0, self.resWeighted - 0.1)
+            self.powWeighted = min(1.0, self.powWeighted + 0.1)
+                
     def getPowerConsumption(self):
         totalPower = 0
-        hosts = set(container.getHost() for container in self.containerlist if container is not None)  # Lọc host hợp lệ
+        hosts = set(container.getHost() for container in self.containerlist if container is not None) 
         
         for host in hosts:
             containers = [c for c in self.containerlist if c is not None and c.getHost() == host]
             if not containers:
-                continue  # Nếu host không có container thì bỏ qua
+                continue  
 
-            # Tính CPU utilization cho từng host
-            CPU_utilization = sum(c.getCPU() for c in containers) / host.getCPUAvailable()
-            print("CPU_util", CPU_utilization)
-            totalPower += host.getPowerCPU(CPU_utilization)  # Tính power dựa trên CPU utilization của từng host
-        
+            CPU_utilization = sum(c.getCPU() for c in containers) / 100
+            totalPower += host.getPowerCPU(min(1, CPU_utilization)) 
+
         return totalPower

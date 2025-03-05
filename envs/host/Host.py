@@ -142,8 +142,9 @@ class Host():
 
     def calculateHostPowerConsumption(self):
         containers = self.env.getContainersOfHost(self.id)
-        CPU_utilization = sum(c.getCPU() for c in containers) / self.getCPUAvailable()
+        CPU_utilization = sum(self.env.getContainerByID(containerID).getCPU() for containerID in containers) / self.getCPUAvailable()
         totalPower = self.getPowerCPU(CPU_utilization)
         return totalPower
+    
         
         
