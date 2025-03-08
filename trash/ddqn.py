@@ -11,12 +11,10 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 import time, datetime
-from network.network import conv_mlp_net
-import matplotlib.pyplot as plt
 import matplotlib
 from buffer.per import PrioritizedReplayBuffer
 from envs.Env import Env
-
+from network.net import Net
 
 is_ipython = 'inline' in matplotlib.get_backend()
 if is_ipython:
@@ -44,48 +42,23 @@ class SkipFrame(gym.Wrapper):
 
     def step(self, action):
         pass
-
-
-class MECNet(nn.Module):
-    def __init__(self, input_dim, output_dim):
-        super().__init__()
-        # print(input_dim)
-        c, h = input_dim
-        self.block_num = 3
-        self.online = self.__build_nn(c, output_dim)
-        self.target = self.__build_nn(c, output_dim)
-        self.target.load_state_dict(self.online.state_dict())
-
-        for p in self.target.parameters():
-            p.requires_grad = False
-        
-    def forward(self, input, model):
-        # print(input)
-        if model == "online":
-            return self.online(input)
-        elif model == "target":
-            return self.target(input)
-
-
-    def __build_nn(self, c, output_dim):
-        return conv_mlp_net(conv_in=c, conv_ch=512, mlp_in=output_dim*512, mlp_ch=1024, out_ch=output_dim,block_num=self.block_num)
     
 
-class MECAgent:
+class DDQNAgent:
     def __init__(self, state_dim, action_dim, save_dir, checkpoint=""):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.save_dir = save_dir
 
         self.device = "cpu"
-        self.net = MECNet(self.state_dim, self.action_dim).to(dtype=torch.float32)
+        self.net = Net(self.state_dim, self.action_dim).to(dtype=torch.float32)
         self.net = self.net.to(device=self.device)
 
         self.exploration_rate = 0
         self.exploration_rate_decay = 0.99975
         self.exploration_rate_min = 0.1
         self.curr_step = 0
-        self.save_every = 1e3
+        self.save_every = 10
 
         self.memory = PrioritizedReplayBuffer(capacity=100000)  # Use PER buffer
         self.batch_size = 32
@@ -318,7 +291,7 @@ class MECLogger:
             plt.legend()
             plt.savefig(getattr(self, f"{metric}_plot"))
 
-def simulate():
+def train():
     use_cuda = torch.cuda.is_available()
 
     save_dir = Path("train_dqn") / datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
@@ -329,7 +302,7 @@ def simulate():
     
     checkpoint_path = ""
 
-    mec = MECAgent(state_dim=env.observation_space.shape, action_dim=env.action_space.n, save_dir=save_dir, checkpoint=checkpoint_path)
+    mec = DDQNAgent(state_dim=env.observation_space.shape, action_dim=env.action_space.n, save_dir=save_dir, checkpoint=checkpoint_path)
     logger = MECLogger(save_dir)
     
 
@@ -339,11 +312,9 @@ def simulate():
         step = 0
         state, info = env.reset()
         while True:
-            print(state)
             action = mec.act(state)
             decision = env.filter_action(action)
             next_state, reward, done, info = env.step(action=decision)
-            print(info)
             
             # next_state, reward, done, info = env.step(action)
             mec.cache(state, next_state, action, reward, done)
@@ -362,4 +333,4 @@ def simulate():
         
         logger.record(episode=e, epsilon=mec.exploration_rate, step=mec.curr_step)
 
-simulate()
+train()

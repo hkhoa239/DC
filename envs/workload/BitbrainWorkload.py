@@ -45,7 +45,7 @@ class BWGD(Workload):
                 ips_list=(ips_multiplier*df['CPU usage [MHZ]']).to_list(), 
                 max_ips=(ips_multiplier*df['CPU capacity provisioned [MHZ]'].to_list()[0]), 
                 duration=int(1.2*sla), 
-                SLA=interval+sla
+                SLA=sla
             )
 
             RAMModel = RMBitbrain(
@@ -67,10 +67,9 @@ class BWGD(Workload):
             self.creation_id += 1
 
         
-
         self.createdContainers += workloadlist
 
-        self.deployedContainers += [False] * len(workloadlist)
+        # self.deployedContainers += [False] * len(workloadlist)
             
-        return self.getUndeployedContainers()
+        return workloadlist
 

@@ -1,1 +1,2 @@
 # DC
+python run.py

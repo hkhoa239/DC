@@ -1,0 +1,52 @@
+[
+    {
+        "ipsCap": 5000,
+        "ramSizeCap": 3000,
+        "diskSizeCap": 30000
+    },
+    {
+        "ipsCap": 10000,
+        "ramSizeCap": 4000,
+        "diskSizeCap": 40000
+    },
+    {
+        "ipsCap": 50000,
+        "ramSizeCap": 8000,
+        "diskSizeCap": 80000
+    },
+    {
+        "ipsCap": 5000,
+        "ramSizeCap": 3000,
+        "diskSizeCap": 30000
+    },
+    {
+        "ipsCap": 10000,
+        "ramSizeCap": 4000,
+        "diskSizeCap": 40000
+    },
+    {
+        "ipsCap": 50000,
+        "ramSizeCap": 8000,
+        "diskSizeCap": 80000
+    },
+    {
+        "ipsCap": 5000,
+        "ramSizeCap": 3000,
+        "diskSizeCap": 30000
+    },
+    {
+        "ipsCap": 10000,
+        "ramSizeCap": 4000,
+        "diskSizeCap": 40000
+    },
+    {
+        "ipsCap": 50000,
+        "ramSizeCap": 8000,
+        "diskSizeCap": 80000
+    },
+    {
+        "ipsCap": 5000,
+        "ramSizeCap": 3000,
+        "diskSizeCap": 30000
+    }
+]

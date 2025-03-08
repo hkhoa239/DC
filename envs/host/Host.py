@@ -15,12 +15,17 @@ class Host():
         self.bwCapacity = Bw
         self.latency = Latency
         self.powermodel = Powermodel
+        self.ips_used_in_step = 0
+        self.step_utilization = 0
         self.powermodel.allocHost(self)
         self.powermodel.host = self
         self.env = Environment
         
-    def getPower(self):
-        return self.powermodel.power()
+    def getPower(self, utilization):
+        return self.powermodel.power(utilization)
+    
+    def getPowerCPU(self, cpu):
+        return self.powermodel.powerFormCPU(cpu)
     
     def getPowerFromIPS(self, ips):
         # Ensure CPU utilization is limited at 100%
@@ -28,6 +33,10 @@ class Host():
 
     def getCPU(self):
         ips = self.getApparentIPS()
+        return 100 * (ips / self.ipsCapacity)
+    
+    def getCPUAvailable(self):
+        ips = self.getIPSAvailable()
         return 100 * (ips / self.ipsCapacity)
     
     def getBaseIPS(self):
@@ -93,11 +102,13 @@ class Host():
     def get_info(self):
         info = {
             "id": self.id,
-            "container_ids": self.env.getContainersOfHost(self.id),
-            "power": self.getPower(),
-            "ram": self.getCurrentRAM(),
-            "disk": self.getCurrentDisk(),
-            "ips": self.getApparentIPS(),
+            # "container_ids": self.env.getContainersOfHost(self.id),
+            "power": self.getPower(self.step_utilization),
+            # "ram": self.getCurrentRAM(),
+            # "disk": self.getCurrentDisk(),
+            # "ips": self.getApparentIPS(),
+            # "ips_used_in_step": self.ips_used_in_step,
+            "utilization": self.step_utilization
         }
         return info
     
@@ -130,8 +141,14 @@ class Host():
         ipsUsed = self.getIPSUsed()
         ramSizeUsed, ramReadUsed, ramWriteUsed = self.getRAMUsed()
         diskSizeUsed, diskReadUsed, diskWriteUsed = self.getDiskUsed()
-        power = self.getPower()
+        power = self.getPower(self.step_utilization)
         return [ipsUsed, ramSizeUsed, ramReadUsed, ramWriteUsed, diskSizeUsed, diskReadUsed, diskWriteUsed, power]
 
+    def calculateHostPowerConsumption(self):
+        self.step_utilization = self.ips_used_in_step / self.ipsCapacity
+        totalPower = self.getPower(self.step_utilization)
+        self.ips_used_in_step = 0
+        return totalPower
+    
         
         

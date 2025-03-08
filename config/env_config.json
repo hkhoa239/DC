@@ -1,0 +1,12 @@
+{
+    "config1":
+        {
+            "TotalPower": 2000,
+            "RouterBw": 10000,
+            "ContainerLimit": 1000,
+            "IntervalTime": 1,
+            "HostLimit": 10,
+            "meanJ": 10,
+            "sigmaJ": 1
+        }
+}
