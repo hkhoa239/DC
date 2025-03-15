@@ -23,7 +23,7 @@ class BWGD(Workload):
         
 
 
-        self.dataset_path = "/Users/huynhledangkhoa/Documents/NCKH/data/dc/envs/dataset/gwa-bitbrains/fastStorage"
+        self.dataset_path = "D:/HCMUT/242/Programming Integration Project/DC/envs/dataset/gwa-bitbrains/fastStorage"
         # self.dataset_path = os.path.abspath(os.path.join(parent_dir, "../dataset/gwa-bitbrains/fastStorage"))
         # print("Parent dir: ", parent_dir)
         # ("dataset: ", self.dataset_path)
