@@ -110,30 +110,8 @@ class DDQNAgent:
 
     @torch.no_grad()
     def td_target_munchausen(self, reward, state, action, next_state, done):
-        tau = 0.03
-        alpha = 0.9
-        min_log_policy = -5.0
-
-        # Q(s, a) from online net (used to compute Munchausen bonus)
-        current_Q = self.net(state, model="online")
-        log_pi = F.log_softmax(current_Q / tau, dim=1)
-        munchausen_log_policy = log_pi[np.arange(0, self.batch_size), action]
-        munchausen_term = alpha * torch.clamp(munchausen_log_policy, min=min_log_policy)
-
-        # Double DQN: get best action from Q_online, evaluate from Q_target
-        next_Q_online = self.net(next_state, model="online")
-        best_action = torch.argmax(next_Q_online, axis=1)
-
-        next_Q_target = self.net(next_state, model="target")
-        next_Q = next_Q_target[np.arange(0, self.batch_size), best_action]
-
-        # Final Munchausen target
-        td_target = reward + munchausen_term + (1 - done.float()) * self.gamma * next_Q
-
-        # Optional: Rescale target
-        td_target = self.value_rescale(td_target)
-
-        return td_target
+        pass
+        
 
     def update_Q_online(self, td_estimate, td_target, IS_weights):
         loss = (td_estimate - td_target).pow(2) * IS_weights

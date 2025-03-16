@@ -20,7 +20,6 @@ def simulate():
     sche = Scheduler(env=env, model="ddqn", checkpoint_path="model/net_2.chkpt")
     sche.simulate()
 
-
 def random_simulate():
     config = load_config(json_path="config/env_config.json",part=1)
     env = load_env(params=config)

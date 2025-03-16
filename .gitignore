@@ -12,6 +12,7 @@ results
 modstat.py
 runs/
 model/
+models/
 # C extensions
 *.so
 logs/

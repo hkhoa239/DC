@@ -202,7 +202,7 @@ class dueling_q_network(nn.Module):
             nn.LeakyReLU(0.1, inplace=True)]) # activation function
 
         self.outputAdvantage = nn.Sequential(*[
-            nn.Conv1d(ch, action_size, kernel_size=1, stride=1, padding=0),            
+            nn.Conv1d(ch, ch, kernel_size=1, stride=1, padding=0), 
             nn.LeakyReLU(0.1, inplace=True)]) # activation function
 
     def forward(self, x):
