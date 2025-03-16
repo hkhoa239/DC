@@ -14,7 +14,7 @@ class Scheduler():
         self.env = env
         self.model = model
         self.save_dir = Path(f"train_{self.model}") / datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
-        self.checkpoint_path = "/Users/huynhledangkhoa/Documents/NCKH/data/dc/models/net_1.chkpt"
+        self.checkpoint_path = ""
         if model == "ddqn":
             self.agent = DDQNAgent(state_dim=env.observation_space.shape, action_dim=env.action_space.n, save_dir=self.save_dir, checkpoint=self.checkpoint_path)
 
