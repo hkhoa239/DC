@@ -39,6 +39,7 @@ class mlp_resblock(nn.Module):
             x = self.relus[i](x)
         if self.is_out:
             x = self.out_mlp(x)
+        print(x.shape)
         return x
 
 
@@ -142,13 +143,13 @@ class conv_resblock(nn.Module):
             x = self.out_conv(x)
         if self.is_relu:
             x = self.relu(x)
-
         return x
 
 
 class conv_mlp_net(nn.Module):
     def __init__(self, conv_in, conv_ch, mlp_in, mlp_ch, out_ch, block_num=3, is_gpu=True):
         super().__init__()
+
         input_dim = 36
         action_dim = 2
         self.is_gpu = is_gpu
@@ -167,14 +168,67 @@ class conv_mlp_net(nn.Module):
 
     def forward(self, obs):
         x = self.feature_network_A(obs)
+        print(x.shape)
         x = x.view(-1, self.mlp_in)
+        print(x.shape, end='\n\n')
         x = self.feature_network_B(x)
         
         return x
-    
+   
+class dueling_q_network(nn.Module):
+    def __init__(self, state_size, action_size, ch = 512):
+        super().__init__()
+        self.models=nn.Sequential()
+        self.relus=nn.Sequential()
+        self.output_size = action_size
+        
+        self.inputLayer = nn.Sequential(*[
+            nn.Conv1d(state_size, ch, kernel_size=1, stride=1, padding=0),
+            nn.LeakyReLU(0.1, inplace=False)])
 
+        for i in range(2):
+            self.models.add_module(str(i), nn.Sequential(*[
+                nn.Conv1d(ch, ch, kernel_size=1, stride=1, padding=0),
+                nn.LeakyReLU(0.1, inplace=True),
+                nn.Conv1d(ch, ch, kernel_size=1, stride=1, padding=0)]))
+            self.relus.add_module(str(i), nn.Sequential(*[
+                nn.LeakyReLU(0.1, inplace=True)]))
+
+        self.Value = self.outputAdvantage = nn.Sequential(*[
+            nn.Conv1d(ch, ch, kernel_size=1, stride=1, padding=0),            
+            nn.LeakyReLU(0.1, inplace=True)]) # activation function
+
+        self.Advantage = self.outputAdvantage = nn.Sequential(*[
+            nn.Conv1d(ch, ch, kernel_size=1, stride=1, padding=0),       
+            nn.LeakyReLU(0.1, inplace=True)]) # activation function
+
+        self.outputAdvantage = nn.Sequential(*[
+            nn.Conv1d(ch, ch, kernel_size=1, stride=1, padding=0),            
+            nn.LeakyReLU(0.1, inplace=True)]) # activation function
+
+    def forward(self, x):
+        x = x.float()
+        x = self.inputLayer(x)
+        for i in range(2):
+            x0 = x
+            x = self.models[i](x)
+            x += x0
+            x = self.relus[i](x)
+        
+        xVal = self.Value(x)
+        xVal = self.outputAdvantage(x)
+        xAdv = self.Advantage(x)
+        xAdv = self.outputAdvantage(x)
+
+        avg = torch.mean(xAdv, dim = 1, keepdim=True)
+        q = xAdv + xVal - avg        
+        q = q.view(-1, self.output_size * 512)
+
+        return q
+
+"""
 class DuelingQNetwork(nn.Module):
-    def __init__(self, state_size, action_size, seed=3152025, ch=256, fc1_units=256, fc2_units=128, fc3_units=512):
+    def __init__(self, state_size, action_size, seed=3152025, fc1_units=256, fc2_units=128, fc3_units=512):
         super(DuelingQNetwork, self).__init__()
         
         self.seed = torch.manual_seed(seed)
@@ -195,16 +249,15 @@ class DuelingQNetwork(nn.Module):
         x = nn.LeakyReLU(0.1, inplace=False)(self.fc2(x))
 
         x_adv = nn.LeakyReLU(0.1, inplace=False)(self.fc_adv(x))
-        x_adv = nn.LeakyReLU(0.1, inplace=False)(self.val(x_adv))
+        x_adv = nn.LeakyReLU(0.1, inplace=False)(self.adv(x_adv))
 
         x_val = nn.LeakyReLU(0.1, inplace=False)(self.fc_val(x))
-        x_val = nn.LeakyReLU(0.1, inplace=False)(self.val(x_val))
+        x_val = nn.LeakyReLU(0.1, inplace=False)(self.adv(x_val))
 
         x_val = torch.transpose(x_val, 1, 2)
         x_adv = torch.transpose(x_adv, 1, 2)
 
         advAverage = torch.mean(x_adv, dim=1, keepdim=True)
         q = x_adv + x_val - advAverage
-        torch.squeeze(q, 0)
-        print(q.shape)
-        return q
+        return q[0]
+"""

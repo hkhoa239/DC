@@ -234,7 +234,7 @@ class Env():
                     self.containerlist[cid].hostid = -1
 
         for (cid, hid) in action:
-            # print(f"CID {cid} - HID {hid}")
+#            print(f"CID {cid} - HID {hid}")
             if (self.containerlist[cid] != None):
                 container = self.getContainerByID(cid)
                 currentHostID = self.getContainerByID(cid).getHostID()
