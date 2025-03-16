@@ -137,8 +137,11 @@ class Env():
         return deployed
 
     def addContainerListInit(self, containerInfoList):
-        deployed = containerInfoList[:min(len(containerInfoList), self.containerlimit - self.getNumActiveContainers())]
+        containerCanAdd = self.containerlimit - self.getNumActiveContainers()
+        containerInfoListLen = len(containerInfoList)
+        deployed = containerInfoList[:min(containerInfoListLen, containerCanAdd)]
         deployedContainers = []
+        self.dropped += (containerInfoListLen - containerCanAdd if containerCanAdd < containerInfoListLen else 0)
         for CreationID, CreationInterval, IPSModel, RAMModel, DiskModel in deployed:
             dep = self.addContainerInit(
                 CreationID, CreationInterval, IPSModel, RAMModel, DiskModel
@@ -166,8 +169,11 @@ class Env():
         return container
     
     def addContainerList(self, containerInfoList):
-        deployed = containerInfoList[:min(len(containerInfoList), self.containerlimit - self.getNumActiveContainers())]
+        containerCanAdd = self.containerlimit - self.getNumActiveContainers()
+        containerInfoListLen = len(containerInfoList)
+        deployed = containerInfoList[:min(containerInfoListLen, containerCanAdd)]
         deployedContainers = []
+        self.dropped += (containerInfoListLen - containerCanAdd if containerCanAdd < containerInfoListLen else 0)
         for CreationID, CreationInterval, IPSModel, RAMModel, DiskModel in deployed:
             dep = self.addContainer(
                 CreationID, CreationInterval, IPSModel, RAMModel, DiskModel
@@ -299,26 +305,25 @@ class Env():
 
 
     def get_info(self):
-        hostl = []
-        containerl = []
+        # hostl = []
+        # containerl = []
 
-        for host in self.hostlist:
-            hostl.append(host.get_info())
+        # for host in self.hostlist:
+        #     hostl.append(host.get_info())
 
-        # for container in self.containerlist:
-        #     if container:
-        #         containerl.append(container.get_info())
 
-        return {
-            "step": self.curr_step-1,
-            "hosts": hostl,
-            "completed": self.total_completed_task,
-            "dropped": self.dropped,
-            # "containers": containerl,
-            "power_consumption": self.steppower,
-            "respone_time_history": self.historical_response_time,
-            "fifo": len(self.fifo)
-        }
+        # return {
+        #     "step": self.curr_step-1,
+        #     "hosts": hostl,
+        #     "completed": self.total_completed_task,
+        #     "dropped": self.dropped,
+        #     # "containers": containerl,
+        #     "power_consumption": self.steppower,
+        #     "respone_time_history": self.historical_response_time,
+        #     "fifo": len(self.fifo)
+        # }
+
+        return None
     
     def get_container_usage(self, host):
         usage = []
@@ -349,12 +354,22 @@ class Env():
         return state
 
     def filter_action(self, action):
-        decision = []
-        
-        for i in self.fifo:
-            c = self.containerlist[i]
-            if c and c.getHostID() != action and c.getHostID() == -1:
-                decision.append((c.id, action))
+        if isinstance(action,list):
+            decision = []
+            
+            for i in self.fifo:
+                for h in action:
+                    c = self.containerlist[i]
+                    if c and c.getHostID() != action and c.getHostID() == -1 and self.checkIfPossible(c.id,h):
+                        decision.append((c.id,h))
+
+        else:
+            decision = []
+            
+            for i in self.fifo:
+                c = self.containerlist[i]
+                if c and c.getHostID() != action and c.getHostID() == -1:
+                    decision.append((c.id, action))
 
         return decision
     
