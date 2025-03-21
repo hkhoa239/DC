@@ -222,7 +222,7 @@ class dueling_q_network(nn.Module):
 
         avg = torch.mean(xAdv, dim = 1, keepdim=True)
         q = xAdv + xVal - avg        
-        print(q.shape)
+        q = q.mean(-1)
         return q
 
 """
