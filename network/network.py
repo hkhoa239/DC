@@ -176,55 +176,45 @@ class conv_mlp_net(nn.Module):
         return x
    
 class dueling_q_network(nn.Module):
-    def __init__(self, state_size, action_size, ch = 512):
+    def __init__(self, action_size, state_size):
         super().__init__()
-        self.models=nn.Sequential()
-        self.relus=nn.Sequential()
-        self.output_size = action_size
-        
-        self.inputLayer = nn.Sequential(*[
-            nn.Conv1d(state_size, ch, kernel_size=1, stride=1, padding=0),
-            nn.LeakyReLU(0.1, inplace=False)])
 
-        for i in range(2):
-            self.models.add_module(str(i), nn.Sequential(*[
-                nn.Conv1d(ch, ch, kernel_size=1, stride=1, padding=0),
-                nn.LeakyReLU(0.1, inplace=True),
-                nn.Conv1d(ch, ch, kernel_size=1, stride=1, padding=0)]))
-            self.relus.add_module(str(i), nn.Sequential(*[
-                nn.LeakyReLU(0.1, inplace=True)]))
+        self.state_size = state_size
+        self.action_size = action_size
 
-        self.Value = self.outputAdvantage = nn.Sequential(*[
-            nn.Conv1d(ch, ch, kernel_size=1, stride=1, padding=0),            
-            nn.LeakyReLU(0.1, inplace=True)]) # activation function
+        self.conv1 = nn.Conv1d(state_size, 32, kernel_size=1, stride=1)
+        self.conv2 = nn.Conv1d(32, 64, kernel_size=1, stride=1)
+        self.conv3 = nn.Conv1d(64, 64, kernel_size=1, stride=1)
 
-        self.Advantage = self.outputAdvantage = nn.Sequential(*[
-            nn.Conv1d(ch, ch, kernel_size=1, stride=1, padding=0),       
-            nn.LeakyReLU(0.1, inplace=True)]) # activation function
+        self.conv_output_dims = self.get_conv_output_dim(state_size)
+    
+        self.fc1 = nn.Linear(self.conv_output_dims, 512)
+        self.fc2 = nn.Linear(512, 256)
 
-        self.outputAdvantage = nn.Sequential(*[
-            nn.Conv1d(ch, action_size, kernel_size=1, stride=1, padding=0),            
-            nn.LeakyReLU(0.1, inplace=True)]) # activation function
+        self.value = nn.Linear(256, 1)
+        self.advantage = nn.Linear(256, action_size)
 
-    def forward(self, x):
-        x = x.float()
-        x = self.inputLayer(x)
-        for i in range(2):
-            x0 = x
-            x = self.models[i](x)
-            x += x0
-            x = self.relus[i](x)
-        
-        xVal = self.Value(x)
-        xVal = self.outputAdvantage(x)
-        xAdv = self.Advantage(x)
-        xAdv = self.outputAdvantage(x)
+    def get_conv_output_dim(self, state_size):
+        temp = torch.zeros(state_size, 1)
+        dim1 = self.conv1(temp)
+        dim2 = self.conv2(dim1)
+        dim3 = self.conv3(dim2)
+        return int(np.prod(dim3.size()))
 
-        avg = torch.mean(xAdv, dim = 1, keepdim=True)
-        q = xAdv + xVal - avg        
-        q = q.mean(-1)
-        return q
+    def forward(self, data):
+        data = data.float()
 
+        conv_layer1 = F.relu(self.conv1(data))
+        conv_layer2 = F.relu(self.conv2(conv_layer1))
+        conv_layer3 = F.relu(self.conv3(conv_layer2))        
+        conv_layer3 = conv_layer3.transpose(1, 2)
+
+        fc_layer1 = F.relu(self.fc1(conv_layer3))
+        fc_layer2 = F.relu(self.fc2(fc_layer1))
+
+        value = self.value(fc_layer2)
+        advantage = self.advantage(fc_layer2)
+        return value, advantage
 """
 class DuelingQNetwork(nn.Module):
     def __init__(self, state_size, action_size, seed=3152025, fc1_units=256, fc2_units=128, fc3_units=512):

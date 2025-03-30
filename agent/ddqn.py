@@ -30,12 +30,12 @@ class DDQNAgent:
         self.action_dim = action_dim
         self.save_dir = save_dir
 
-        self.device = "cpu"
+        self.device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
         self.net = Net(self.state_dim, self.action_dim).to(dtype=torch.float32)
         self.net = self.net.to(device=self.device)
 
         self.exploration_rate = 0
-        self.exploration_rate_decay = 0.99975
+        self.exploration_rate_decay = 0.99
         self.exploration_rate_min = 0.1
         self.curr_step = 0
         self.save_every = 100
@@ -71,8 +71,12 @@ class DDQNAgent:
             action_idx = np.random.randint(self.action_dim)
         else:
             state = torch.tensor(state, device=self.device).unsqueeze(0)
-            actions_values = self.net(state, model="online")
-            action_idx = torch.argmax(actions_values, axis=1).item()
+#            actions_values = self.net(state, model="online")
+
+            state_value, action_value = self.net(state, model="online")
+
+#            action_idx = torch.argmax(actions_values, axis=1).item()
+            action_idx = torch.argmax(action_value, axis=1).item()
         self.exploration_rate *= self.exploration_rate_decay
         self.exploration_rate = max(self.exploration_rate_min, self.exploration_rate)
         self.curr_step += 1
@@ -100,6 +104,7 @@ class DDQNAgent:
 
     @torch.no_grad()
     def td_target(self, reward, next_state, done):
+        print("Here")
         next_state_Q = self.net(next_state, model="online")
         best_action = torch.argmax(next_state_Q, axis=1)
         next_Q = self.net(next_state, model="target")[np.arange(0, self.batch_size), best_action]
@@ -114,6 +119,7 @@ class DDQNAgent:
         return loss.item()
 
     def learn(self):
+        print('Here')
         if self.curr_step % self.sync_every == 0:
             self.sync_Q_target()
 
