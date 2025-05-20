@@ -30,7 +30,7 @@ class PPOAgent():
         self.actor_critic_net = PPOActorCriticNet(state_dim, action_dim).to(self.device)
         
         # Optimizer 
-        self.optimizer = opt.Adam(self.actor_critic.parameters(), lr = lr_actor_critic)
+        self.optimizer = opt.Adam(self.actor_critic_net.parameters(), lr = lr_actor_critic)
 
          # on-policy memory
         self.memory_states = []
@@ -47,7 +47,7 @@ class PPOAgent():
         self.curr_step_count = 0
 
         if checkpoint_path_actor_critic and Path(checkpoint_path_actor_critic).exists():
-            self._load_network(self.actor_critic, checkpoint_path_actor_critic, self.optimizer, "actor_critic")
+            self._load_network(self.actor_critic_net, checkpoint_path_actor_critic, self.optimizer, "actor_critic")
     
     def _store_transition_tensor(self, state_t, action_t, log_prob_t, value_t, reward_t, done_t):
         """Lưu trữ các tensor đã được chuyển lên device."""
@@ -146,8 +146,8 @@ class PPOAgent():
             # Tạo mini-batches nếu cần, ở đây dùng cả batch
             
             # --- Actor Loss ---
-            self.actor_critic.train()
-            action_dist_new = self.actor_critic.get_action_distribution(old_states_batch)
+            self.actor_critic_net.train()
+            action_dist_new = self.actor_critic_net.get_action_distribution(old_states_batch)
             new_log_probs = action_dist_new.log_prob(old_actions_batch) # old_actions_batch là index
             entropy = action_dist_new.entropy().mean()
 
@@ -158,22 +158,22 @@ class PPOAgent():
             policy_loss = -torch.min(surr1, surr2).mean()
             actor_total_loss = policy_loss - self.entropy_coef * entropy # Trừ entropy bonus (vì muốn maximize entropy)
 
-            self.optimizer_actor_critic.zero_grad()
+            self.optimizer.zero_grad()
             actor_total_loss.backward()
             # torch.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=0.5) # Optional: gradient clipping
-            self.optimizer_actor_critic.step()
+            self.optimizer.step()
 
             # --- Critic Loss ---
-            self.actor_critic.train()
+            self.actor_critic_net.train()
             # new_values là V(s_t) được ước lượng bởi critic *hiện tại* cho các state trong batch
             new_values = self.critic(old_states_batch).squeeze(-1) # Shape: (N,)
             value_loss = F.mse_loss(new_values, returns) # returns là target V_target = GAE_t + V_old(s_t)
 
-            self.optimizer_actor_critic.zero_grad()
+            self.optimizer.zero_grad()
             critic_total_loss = self.vf_coef * value_loss
             critic_total_loss.backward()
             # torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=0.5) # Optional
-            self.optimizer_actor_critic.step()
+            self.optimizer.step()
 
             actor_losses.append(policy_loss.item()) # Chỉ lưu policy loss (chưa trừ entropy)
             critic_losses.append(value_loss.item())
