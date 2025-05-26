@@ -20,7 +20,7 @@ if project_root not in sys.path:
 from envs.Env import Env 
 from scheduler.rl.agent.PPOAgent import PPOAgent 
 
-VM_FEATURE_DIM = 5  # CPU, Core, RAM, BW Up, BW Down from VM
+VM_FEATURE_DIM = 2  # Core, RAM from VM
 
 # ----- HYPERPARAMETERS (Có thể được truyền vào hàm train) -----
 # DEFAULT_ENV_PARAMS = {
@@ -69,7 +69,7 @@ TEST_PPO_AGENT_PARAMS = {
     "gae_lambda": 0.95,
     "entropy_coef": 0.01,
     "vf_coef": 0.5,
-    "device": "cpu", # Chắc chắn chạy trên CPU
+    "device": "cuda" if torch.cuda.is_available() else "cpu",
     "save_dir": "ppo_checkpoints_test_run",
     "checkpoint_path_actor_critic": None
 }
@@ -85,11 +85,11 @@ TEST_TRAINING_PARAMS = {
 def get_vm_features(vm_instance):
     if vm_instance:
         return np.array([
-            vm_instance.cpu,
+            # vm_instance.cpu,
             vm_instance.core,
             vm_instance.ram,
-            vm_instance.bwup,
-            vm_instance.bwdown
+            # vm_instance.bwup,
+            # vm_instance.bwdown
         ], dtype=np.float32)
     return np.zeros(VM_FEATURE_DIM, dtype=np.float32)
 
@@ -230,9 +230,9 @@ def train(env_params, agent_params, training_params):
                 decision = [(selected_vid, action_host_idx)]
                 state_for_memory_tensor = torch.tensor(current_ppo_specific_state_np, dtype=torch.float32, device=agent.device)
 
-                next_original_host_state_np, reward, done_env, truncated_env, info = env.step(decision) #
+                next_original_host_state_np, reward, done_env, info = env.step(decision) #
 
-                is_ppo_transition_terminal = done_env or truncated_env
+                is_ppo_transition_terminal = done_env 
                 if ppo_step_in_episode == max_steps_per_ppo_episode - 1:
                     is_ppo_transition_terminal = True
                 
@@ -250,7 +250,7 @@ def train(env_params, agent_params, training_params):
                 num_steps_collected_this_batch += 1
                 progress_bar.update(1)
 
-                if done_env or truncated_env:
+                if done_env:
                     break
             
             rewards_for_current_batch_episodes.append(current_ppo_episode_reward_sum)
@@ -332,7 +332,7 @@ def run(env_params, agent, num_episodes=10, trained_agent_path=None):
 
         for step_num in range(max_eval_steps):
             selectable_vms_ids = env.getSelectableVms()
-            if not selectable_vms_ids or done_env or truncated_env:
+            if not selectable_vms_ids or done_env:
                 break
 
             selected_vid = selectable_vms_ids[0]
@@ -350,7 +350,7 @@ def run(env_params, agent, num_episodes=10, trained_agent_path=None):
             action_host_idx, _, _ = agent.select_action(current_ppo_specific_state_np) # Không cần log_prob, value
             
             decision = [(selected_vid, action_host_idx)]
-            next_original_host_state_np, reward, done_env, truncated_env, info = env.step(decision)
+            next_original_host_state_np, reward, done_env, info = env.step(decision)
             
             original_host_state_np = next_original_host_state_np
             episode_reward += reward
