@@ -190,6 +190,7 @@ class A3CScheduler(Scheduler):
     @staticmethod
     def worker(global_model, optimizer, counter, max_steps, num_episodes, exploration_rate):
         env = Env()
+        env.reset()
         local_model = ActorCritic(env.observation_space.shape, env.action_space.n)
         local_model.load_state_dict(global_model.state_dict())
         for e in range(num_episodes):
@@ -205,7 +206,6 @@ class A3CScheduler(Scheduler):
                     state.append([hostMatrix[j][2], hostMatrix[j][3], vmState[0]/hostMatrix[j][0], vmState[1]/hostMatrix[j][1]])
                 state = np.array(state).T
                 state_tensor = torch.tensor(state, dtype=torch.float32, device="cpu").unsqueeze(0)
-
                 logits, value = local_model(state_tensor)
                 probs = F.softmax(logits, dim=-1)
                 dist = torch.distributions.Categorical(probs)
@@ -221,6 +221,8 @@ class A3CScheduler(Scheduler):
                 rewards.append(reward)
                 rew += reward
                 decision.append((vmid, action))
+            
+            print(f"{counter.value}, ", "Decision: ", decision)
 
             R = 0
             returns = []
@@ -263,7 +265,7 @@ class A3CScheduler(Scheduler):
         num_workers = 16
         for _ in range(num_workers):
             p = mp.Process(target=A3CScheduler.worker, args=(
-                self.global_model, self.optimizer, self.env, self.counter, self.max_steps,
+                self.global_model, self.optimizer, self.counter, self.max_steps,
                 self.num_episodes, self.exploration_rate
             ))
             p.start()
