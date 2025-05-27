@@ -222,7 +222,7 @@ class A3CScheduler(Scheduler):
                 rew += reward
                 decision.append((vmid, action))
             
-            print(f"{counter.value}, ", "Decision: ", decision)
+            print(f"{counter.value},", "Decision: ", decision)
 
             R = 0
             returns = []
